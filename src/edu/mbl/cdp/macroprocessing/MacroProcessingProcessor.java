@@ -31,6 +31,7 @@ package edu.mbl.cdp.macroprocessing;
  * Marine Biological Laboratory, Woods Hole, Mass.
  * 
  */
+
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
@@ -51,6 +52,7 @@ public class MacroProcessingProcessor extends DataProcessor<TaggedImage> {
     
     JSONObject json = null;
     int imgDepth;    
+    public long timeOut = 1000;
     TaggedMacroProcessing tfa;
     TaggedImage imageOnError;
 
@@ -69,7 +71,9 @@ public class MacroProcessingProcessor extends DataProcessor<TaggedImage> {
             final TaggedImage taggedImage = poll();
                    
             if (taggedImage == null || TaggedImageQueue.isPoison(taggedImage)) { // EOL check
-                produce(taggedImage);
+                if (TaggedImageQueue.isPoison(taggedImage)) {
+                    produce(taggedImage);
+                }
                 return;
             }
                 
@@ -78,10 +82,25 @@ public class MacroProcessingProcessor extends DataProcessor<TaggedImage> {
                 return;
             }
             
-            
             // make a copy to produce if MacroProcessing throws an error
             // preserve image acquired
-            imageOnError = taggedImage; 
+            imageOnError = taggedImage;             
+            
+            json = taggedImage.tags;
+            
+            int chIdx = MDUtils.getChannelIndex(json);
+            if (chIdx == 0) {
+                MyVariables.ChannelMetadata_ = new JSONObject[MDUtils.getNumChannels(json)];
+                MyVariables.SummaryMetadata = null;
+                if (tfa.fa.engineWrapper_.isAcquisitionRunning()) {
+                    MyVariables.SummaryMetadata = tfa.fa.engineWrapper_.getSummaryMetadata();
+                } else {
+                    if (tfa.fa.controlFrame_.display_ != null)
+                    MyVariables.SummaryMetadata = tfa.fa.controlFrame_.display_.getSummaryMetadata();
+                }
+            }
+            MyVariables.ChannelMetadata_[chIdx] = json;
+                        
             
             // if in Multi-D mode and disabled on plugin skip processing
             if (tfa.fa.engineWrapper_.isAcquisitionRunning() && !tfa.fa.isEnabledForImageAcquisition) {
@@ -160,13 +179,22 @@ public class MacroProcessingProcessor extends DataProcessor<TaggedImage> {
     }
     
     public synchronized boolean runMacro(String macro, ImagePlus imp, final hasFinished task) {
+        
+        String extStr = "var x=installOpsExtensions();"
+                    + "function installOpsExtensions() {"
+                    + "      run(\"MacroExtensionsStub\");"
+                    + "      return 0;"
+                    + "  }";
+        
+        macro = extStr + macro;
+        
         WindowManager.setTempCurrentImage(imp);
         final Interpreter interp = new Interpreter();
 
         new Thread("TimeOut Thread") {
             public void run() {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(timeOut);
                 } catch (InterruptedException ex) {
                     Logger.getLogger(MacroProcessingProcessor.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -177,25 +205,27 @@ public class MacroProcessingProcessor extends DataProcessor<TaggedImage> {
                     } catch (InterruptedException ex) {
                         Logger.getLogger(MacroProcessingProcessor.class.getName()).log(Level.SEVERE, null, ex);
                     }
-                }                
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ex) {
-                    Logger.getLogger(MacroProcessingProcessor.class.getName()).log(Level.SEVERE, null, ex);
-                }
-                while (!task.isFinished()) {
-
-                    getInstance().interrupt();
+                }           
+                if (task != null && !task.isFinished()) { // ImageJ GUI dialogs issue when run under macro
                     try {
-                        Thread.sleep(1);
+                        Thread.sleep(1000);
                     } catch (InterruptedException ex) {
                         Logger.getLogger(MacroProcessingProcessor.class.getName()).log(Level.SEVERE, null, ex);
                     }
-                }                
+                    while (!task.isFinished()) {
+
+                        getInstance().interrupt();
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException ex) {
+                            Logger.getLogger(MacroProcessingProcessor.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                    }          
+                }
             }
         }.start();
         try {
-            interp.runBatchMacro(macro, imp);
+            interp.runBatchMacro(macro, imp);            
             task.setFinished();
             if (interp.wasError()) {
                 tfa.fa.isUsingMacro = false;
@@ -203,7 +233,7 @@ public class MacroProcessingProcessor extends DataProcessor<TaggedImage> {
                 MacroProcessingControls.showMessage("Macro error: plugin will be disabled !");
                 return false;
             }
-        } catch (Exception e) {
+            } catch (Exception e) {
             tfa.fa.isUsingMacro = false;
             tfa.fa.controlFrame_.setEnableApplyMacro(tfa.fa.isUsingMacro);
             MacroProcessingControls.showMessage("Macro error: plugin will be disabled !");

@@ -1,0 +1,38 @@
+// Macro Processing
+
+MetadataKeyTime = "ElapsedTime-ms"; // Time key
+MetadataKeyChName = "Channel"; // Channel key
+chNum = 0; // 0 based
+grpName = "Channel"; // MMConfig_demo.cfg
+
+Ext.getChMetadata(chNum , MetadataKeyTime, time);
+Ext.getChMetadata(chNum , MetadataKeyChName, chName);
+
+Ext.getSummaryMetadata("Prefix", prefix);
+Ext.getGroupPresetName(MetadataKeyChName, grpPreset);
+
+if (prefix == "Not found" ) {
+title = getTitle();
+if (title == "" || title == "Macro Processing" ) {
+title = "Snap/Live Window";
+}
+} else {
+title = prefix;
+}
+
+u
+setSlice(chNum +1);
+getRawStatistics(area, mean, min, max, stdev, histogram);
+CreateTable(title, chNum, chName, time, mean, grpName, grpPreset);
+
+function CreateTable(title, ch, chN, time, mean, grpName, grpPreset) {
+      
+      row = nResults();      
+      setResult("Dataset", row, title);
+      //setResult("Channel Idx (0 based)", row, ch);
+      setResult("MMgr Grp/Preset", row, grpName + "/" + grpPreset); 
+      setResult("Time (ms)", row, time);
+      setResult("Mean", row, mean);
+      setResult("Channel Name (Mean)", row, chN);
+      updateResults();
+ }

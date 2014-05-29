@@ -34,7 +34,14 @@ package edu.mbl.cdp.macroprocessing;
 
 import com.swtdesigner.SwingResourceManager;
 import ij.IJ;
+import ij.ImagePlus;
+import ij.ImageStack;
+import ij.Macro;
+import ij.WindowManager;
+import ij.gui.ImageWindow;
 import ij.io.SaveDialog;
+import ij.macro.Interpreter;
+import java.awt.Color;
 import java.awt.Frame;
 import java.awt.Image;
 import java.awt.Toolkit;
@@ -49,6 +56,8 @@ import java.io.CharArrayReader;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -65,9 +74,14 @@ import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoManager;
+import org.json.JSONObject;
+import org.micromanager.imageDisplay.AcquisitionVirtualStack;
+import org.micromanager.imageDisplay.VirtualAcquisitionDisplay;
 import org.micromanager.internalinterfaces.AcqSettingsListener;
+import org.micromanager.utils.GUIUtils;
+import org.micromanager.utils.ImageFocusListener;
 
-public class MacroProcessingControls extends javax.swing.JFrame implements AcqSettingsListener {
+public class MacroProcessingControls extends javax.swing.JFrame implements AcqSettingsListener, ImageFocusListener {
 
     /* TODO
      * 
@@ -96,6 +110,10 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     public int FrameXpos = 300;
     public int FrameYpos = 300;
     
+    static boolean showingMsg = false;
+    boolean isValidMacro = false;
+       
+    
     Image iconImage;
     ij.plugin.frame.Editor editor;
             
@@ -109,6 +127,8 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
         setIconImage(iconImage);
         getPreferences();
         
+        jButton5.setBackground(Color.RED);
+        
         addUndoManager(jTextArea1);
         addTabSpaceDefine(jTextArea1, 3);
         addLineNumbersUtil(jTextArea1, jScrollPane1);
@@ -118,6 +138,8 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
         this.setTitle(TaggedMacroProcessing.menuName);
         
         setMacroText(fa.macroString);
+        
+        GUIUtils.registerImageFocusListener(this); // Image Window listener
 
         this.pack();
         frame = this;
@@ -147,7 +169,6 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     
     public void setEnableApplyMacro(boolean bool) {
         jCheckBox2.setSelected(bool);
-        jTextArea1.setEnabled(bool);
         setPreferences();
     }
     
@@ -160,6 +181,7 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
+        jButton4 = new javax.swing.JButton();
         enabledCheckBox_ = new javax.swing.JCheckBox();
         jLabel3 = new javax.swing.JLabel();
         jPanelSouth = new javax.swing.JPanel();
@@ -170,9 +192,15 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
         jButton3 = new javax.swing.JButton();
         jScrollPane1 = new javax.swing.JScrollPane();
         jTextArea1 = new javax.swing.JEditorPane();
+        jButton5 = new javax.swing.JButton();
+        jLabel1 = new javax.swing.JLabel();
+        jTextField1 = new javax.swing.JTextField();
+        jLabel2 = new javax.swing.JLabel();
         jMenuBar1 = new javax.swing.JMenuBar();
         jMenu1 = new javax.swing.JMenu();
         jMenuItem1 = new javax.swing.JMenuItem();
+
+        jButton4.setText("jButton4");
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         setBounds(new java.awt.Rectangle(300, 300, 150, 150));
@@ -253,6 +281,17 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
         });
         jScrollPane1.setViewportView(jTextArea1);
 
+        jButton5.setBackground(new java.awt.Color(255, 0, 0));
+        jButton5.setText("Test");
+        jButton5.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton5ActionPerformed(evt);
+            }
+        });
+
+        jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+        jLabel1.setText("0 ms.");
+
         org.jdesktop.layout.GroupLayout jPanel1Layout = new org.jdesktop.layout.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
@@ -263,7 +302,11 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
                     .add(jScrollPane1)
                     .add(jPanel1Layout.createSequentialGroup()
                         .add(jCheckBox2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 174, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(18, 18, 18)
+                        .add(jLabel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(jButton5)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(jButton3, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 20, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(jButton2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 20, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
@@ -280,13 +323,25 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
                     .add(jButton2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 22, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                         .add(jCheckBox2)
-                        .add(jButton1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 22, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
+                        .add(jButton1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 22, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(jButton5))
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jLabel1))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 197, Short.MAX_VALUE)
+                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 196, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
         jPanelSouth.add(jPanel1, java.awt.BorderLayout.CENTER);
+
+        jTextField1.setHorizontalAlignment(javax.swing.JTextField.CENTER);
+        jTextField1.setText("1000");
+        jTextField1.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusLost(java.awt.event.FocusEvent evt) {
+                jTextField1FocusLost(evt);
+            }
+        });
+
+        jLabel2.setText("TimeOut (ms.)");
 
         jMenu1.setText("Help");
 
@@ -309,9 +364,16 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jLabel3)
-                    .add(enabledCheckBox_))
-                .addContainerGap(109, Short.MAX_VALUE))
+                    .add(layout.createSequentialGroup()
+                        .add(enabledCheckBox_)
+                        .addContainerGap(206, Short.MAX_VALUE))
+                    .add(layout.createSequentialGroup()
+                        .add(jLabel3)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(jLabel2)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(jTextField1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 44, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(18, 18, 18))))
             .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                 .add(layout.createSequentialGroup()
                     .addContainerGap()
@@ -322,8 +384,11 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .addContainerGap()
-                .add(jLabel3)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 277, Short.MAX_VALUE)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(jLabel3)
+                    .add(jTextField1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(jLabel2))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 271, Short.MAX_VALUE)
                 .add(enabledCheckBox_)
                 .addContainerGap())
             .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -394,9 +459,14 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     }//GEN-LAST:event_formWindowClosing
 
     private void jCheckBox2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckBox2ActionPerformed
-        fa_.isUsingMacro = jCheckBox2.isSelected();
-        jTextArea1.setEnabled(fa_.isUsingMacro);
-        setPreferences();
+        if (isValidMacro) {
+            fa_.isUsingMacro = jCheckBox2.isSelected();
+            setPreferences();
+        } else {
+            fa_.isUsingMacro = false;
+            jCheckBox2.setSelected(false);
+            MacroProcessingControls.showMessage("Please 'Test' macro for any errors !");
+        }
     }//GEN-LAST:event_jCheckBox2ActionPerformed
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
@@ -419,10 +489,11 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         SaveDialog sd = new SaveDialog("Save As...", Macros_Location, FileName, null);
         String fName = sd.getFileName();
+        String dir = sd.getDirectory();
         if (fName != null) {
             FileName = fName;
             FileDir = sd.getDirectory();
-            writeFile(fa_.macroString, (Macros_Location + SEP_FILE + FileName));
+            writeFile(fa_.macroString, (dir + SEP_FILE + FileName));
             setPreferences();
         }
     }//GEN-LAST:event_jButton2ActionPerformed
@@ -439,7 +510,16 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     }//GEN-LAST:event_jButton3ActionPerformed
 
     private void jTextArea1FocusLost(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_jTextArea1FocusLost
-        String str = getMacroText();
+        final String str = getMacroText();
+        
+        if (!str.equals(fa_.macroStringBackup)) {
+            isValidMacro = false;
+            jButton5.setBackground(Color.RED);
+            fa_.isUsingMacro = false;
+            jCheckBox2.setSelected(false);
+            jLabel1.setText("0 ms.");
+        }
+        
         if (!showingMsg && !str.equals(fa_.macroStringBackup)) {
             if (fa_.core_.isSequenceRunning()) {
                 setMacroText(fa_.macroStringBackup);
@@ -451,20 +531,90 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
                 return;
             }
         }
-        fa_.macroString = str;
-        setPreferences();
+        
+        final Runnable runn = new Runnable() {
+            public void run() {
+                if (!showingMsg) {
+                    if (isValidMacro) {
+                        fa_.macroString = str;
+                        setPreferences();
+                    } else {
+                        MacroProcessingControls.showMessage("Please 'Test' macro for any errors !");
+                    }
+                } else {
+                    setMacroText(fa_.macroStringBackup);
+                }
+            }
+        };   
+        
+        if (!TestMacroDialog.isAlive()) {
+            TestMacroDialog = new Thread() {
+                public void run() {
+                    try {
+                        while (!isValidMacro) {
+                            Thread.sleep(10);
+                        }
+                        while (isTestingMacro) {
+                            Thread.sleep(10);
+                        }
+                        Thread.sleep(1000);
+                        runn.run();
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(MacroProcessingControls.class.getName()).log(Level.SEVERE, null, ex);                    
+                    }
+                }
+            };
+            TestMacroDialog.start();
+        }
     }//GEN-LAST:event_jTextArea1FocusLost
 
     private void jTextArea1FocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_jTextArea1FocusGained
         fa_.macroStringBackup = getMacroText();        
     }//GEN-LAST:event_jTextArea1FocusGained
 
+    private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton5ActionPerformed
+       String str = getMacroText();
+       long startTime = System.currentTimeMillis();
+       boolean bool = testMacro(str);
+       long estimatedTime = System.currentTimeMillis() - startTime;
+       jLabel1.setText(estimatedTime + " ms.");
+       
+       jTextField1.setText(String.valueOf(estimatedTime*5));
+              
+       if (bool) {
+           jButton5.setBackground(Color.GREEN);
+       } else {
+           jButton5.setBackground(Color.RED);
+           jCheckBox2.setSelected(false);
+           fa_.isUsingMacro = false;
+       }   
+       
+       isValidMacro = bool;
+       isTestingMacro = false;
+    }//GEN-LAST:event_jButton5ActionPerformed
+
+    private void jTextField1FocusLost(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_jTextField1FocusLost
+        String str = jTextField1.getText();
+        try {
+            fa_.processor.timeOut = (long) Integer.parseInt(str);
+        } catch (NumberFormatException e) {
+            System.out.println("CAUGHT: " + e.toString());
+            System.out.println("Defaulting value to 1000");
+            fa_.processor.timeOut = 1000;
+            jTextField1.setText(String.valueOf(1000));
+        }
+    }//GEN-LAST:event_jTextField1FocusLost
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JCheckBox enabledCheckBox_;
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
     private javax.swing.JButton jButton3;
+    private javax.swing.JButton jButton4;
+    private javax.swing.JButton jButton5;
     private javax.swing.JCheckBox jCheckBox2;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JMenu jMenu1;
     private javax.swing.JMenuBar jMenuBar1;
@@ -473,6 +623,7 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     private javax.swing.JPanel jPanelSouth;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JEditorPane jTextArea1;
+    private javax.swing.JTextField jTextField1;
     // End of variables declaration//GEN-END:variables
 
     
@@ -484,7 +635,7 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
         showNonBlockingMessage(JOptionPane.WARNING_MESSAGE, title, msg, getInstance());
     }
     
-    static boolean showingMsg = false;
+    
     public static void showNonBlockingMessage(int msgType, String title, String message, Frame owningFrame_) {
       if (null != owningFrame_) {
          Object[] options = { "OK" };
@@ -559,6 +710,42 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
       }
    }
     
+    public VirtualAcquisitionDisplay display_;
+    @Override
+    public void focusReceived(ImageWindow focusedWindow) {
+        // discard if closed
+        if (focusedWindow == null) {
+            return;
+        }
+        // discard Snap/Live Window
+        if (focusedWindow != null) {
+            String str = focusedWindow.getTitle();
+            if (focusedWindow.getTitle().startsWith("Snap/Live Window") ||  str.equals(" (100%)")) {
+                ImageStack ImpStack = focusedWindow.getImagePlus().getImageStack();
+                if (ImpStack instanceof AcquisitionVirtualStack) {
+                    display_ = ((AcquisitionVirtualStack) ImpStack).getVirtualAcquisitionDisplay();
+                } else {
+                    display_ = null;
+                }
+                return;
+            }     
+        }
+        
+        if (!focusedWindow.isClosed()) {
+            ImageStack ImpStack = focusedWindow.getImagePlus().getImageStack();
+            VirtualAcquisitionDisplay display;
+            if (ImpStack instanceof AcquisitionVirtualStack) {
+                display = ((AcquisitionVirtualStack) ImpStack).getVirtualAcquisitionDisplay();
+                if (display.acquisitionIsRunning()) {
+                    display_ = display;
+                }
+            } else {
+                if (display_!=null && !display_.acquisitionIsRunning()) {
+                    display_ = null;
+                }
+            }
+        }
+    }
     
     public String getMacroText() {
         return jTextArea1.getText();
@@ -567,6 +754,70 @@ public class MacroProcessingControls extends javax.swing.JFrame implements AcqSe
     public void setMacroText(String str) {
         jTextArea1.setText(str);
     }
+        
+    Thread TestMacroDialog = new Thread();
+    boolean isTestingMacro = false;
+    
+    
+    public void fillMetadataArray() {
+        if (display_ != null) {
+            int chN = display_.getNumChannels();
+            MyVariables.ChannelMetadata_ = new JSONObject[chN];
+            MyVariables.SummaryMetadata = display_.getSummaryMetadata();
+            for (int i=0; i < chN; i++) {
+                MyVariables.ChannelMetadata_[i] = display_.getImageCache().getImageTags(i, 0, 0, 0);
+            }
+        }
+    }
+    
+    public boolean testMacro(String macro) {
+        isTestingMacro = true;
+        
+        ImagePlus imp = WindowManager.getCurrentImage();
+        
+        if (imp == null) {
+            MacroProcessingControls.showMessage("Macro error: No Image window was found ! \n"
+                    + "Use 'Snap' to create a test image window.");
+            return false;
+        }
+        
+        fillMetadataArray();
+        
+        String extStr = "var x=installOpsExtensions();"
+                    + "function installOpsExtensions() {"
+                    + "      run(\"MacroExtensionsStub\");"
+                    + "      return 0;"
+                    + "  }";
+        
+        macro = extStr + macro;        
+                                
+        WindowManager.setTempCurrentImage(imp);
+        final Interpreter interp = new Interpreter();
+        try {
+            interp.run(macro);
+            
+            if (interp.wasError()) {
+                macroError(interp, null);
+                return false;
+            }
+            } catch (Exception e) {
+                macroError(interp, e);
+                return false;
+            }
+        
+        return true;
+    }
+        
+    public void macroError(Interpreter interp, Exception e) {
+        MacroProcessingControls.showMessage("Macro error: Macro will not be saved until errors are fixed !");
+        interp.abortMacro();
+        if (e != null){
+            String msg = e.getMessage();
+            if (!(e instanceof RuntimeException && msg != null && e.getMessage().equals(Macro.MACRO_CANCELED))) {
+                IJ.handleException(e);
+            }
+        }
+    }    
     
     public void writeFile(String text, String path) {
         
